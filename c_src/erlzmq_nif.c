@@ -31,6 +31,18 @@
 
 #define ERLZMQ_MAX_CONCURRENT_REQUESTS 16384
 
+#ifndef ZMQ_ROUTING_ID
+#define ZMQ_ROUTING_ID ZMQ_IDENTITY
+#endif
+
+#ifndef ZMQ_CONNECT_ROUTING_ID
+#define ZMQ_CONNECT_ROUTING_ID ZMQ_CONNECT_RID
+#endif
+
+#ifndef ZMQ_IMMEDIATE
+#define ZMQ_IMMEDIATE ZMQ_DELAY_ATTACH_ON_CONNECT
+#endif
+
 static ErlNifResourceType* erlzmq_nif_resource_context;
 static ErlNifResourceType* erlzmq_nif_resource_socket;
 
@@ -344,6 +356,12 @@ NIF(erlzmq_nif_setsockopt)
   switch (option_name) {
     // uint64_t
     case ZMQ_AFFINITY:
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    case ZMQ_VMCI_BUFFER_SIZE:
+    case ZMQ_VMCI_BUFFER_MIN_SIZE:
+    case ZMQ_VMCI_BUFFER_MAX_SIZE:
+    #endif
       if (! enif_get_uint64(env, argv[2], &value_uint64)) {
         return enif_make_badarg(env);
       }
@@ -359,10 +377,43 @@ NIF(erlzmq_nif_setsockopt)
       option_value = &value_int64;
       option_len = sizeof(int64_t);
       break;
+
     // binary
-    case ZMQ_IDENTITY:
+    case ZMQ_CONNECT_ROUTING_ID:
+    case ZMQ_ROUTING_ID:
     case ZMQ_SUBSCRIBE:
     case ZMQ_UNSUBSCRIBE:
+
+    // deprecated
+    case ZMQ_TCP_ACCEPT_FILTER:
+    
+    // character string
+    case ZMQ_GSSAPI_PRINCIPAL:
+    case ZMQ_GSSAPI_SERVICE_PRINCIPAL:
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 3
+    // string
+    case ZMQ_BINDTODEVICE:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    // string
+    case ZMQ_SOCKS_PROXY:
+    // binary
+    case ZMQ_XPUB_WELCOME_MSG:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 0
+    // string
+    case ZMQ_ZAP_DOMAIN:
+    case ZMQ_PLAIN_PASSWORD:
+    case ZMQ_PLAIN_USERNAME:
+    
+    // binary or Z85 string
+    case ZMQ_CURVE_PUBLICKEY:
+    case ZMQ_CURVE_SECRETKEY:
+    case ZMQ_CURVE_SERVERKEY:
+    #endif
       if (! enif_inspect_iolist_as_binary(env, argv[2], &value_binary)) {
         return enif_make_badarg(env);
       }
@@ -370,20 +421,70 @@ NIF(erlzmq_nif_setsockopt)
       option_len = value_binary.size;
       break;
     // int
-    case ZMQ_SNDHWM:
-    case ZMQ_RCVHWM:
-    case ZMQ_RATE:
-    case ZMQ_RECOVERY_IVL:
-    case ZMQ_RCVBUF:
-    case ZMQ_SNDBUF:
+    case ZMQ_BACKLOG:
+    case ZMQ_CURVE_SERVER:
+    case ZMQ_GSSAPI_PLAINTEXT:
+    case ZMQ_GSSAPI_SERVER:
+    case ZMQ_IMMEDIATE:
+    case ZMQ_IPV6:
     case ZMQ_LINGER:
+    case ZMQ_MULTICAST_HOPS:
+    case ZMQ_RATE:
+    case ZMQ_RCVBUF:
+    case ZMQ_RCVHWM:
+    case ZMQ_RCVTIMEO:
     case ZMQ_RECONNECT_IVL:
     case ZMQ_RECONNECT_IVL_MAX:
-    case ZMQ_BACKLOG:
-    case ZMQ_MULTICAST_HOPS:
-    case ZMQ_RCVTIMEO:
+    case ZMQ_RECOVERY_IVL:
+    case ZMQ_ROUTER_MANDATORY:
+    case ZMQ_ROUTER_RAW:
+    case ZMQ_SNDBUF:
+    case ZMQ_SNDHWM:
     case ZMQ_SNDTIMEO:
+    case ZMQ_TCP_KEEPALIVE:
+    case ZMQ_TCP_KEEPALIVE_CNT:
+    case ZMQ_TCP_KEEPALIVE_IDLE:
+    case ZMQ_TCP_KEEPALIVE_INTVL:
+    case ZMQ_XPUB_VERBOSE:
+    
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 3
+    case ZMQ_GSSAPI_SERVICE_PRINCIPAL_NAMETYPE:
+    case ZMQ_GSSAPI_PRINCIPAL_NAMETYPE:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    case ZMQ_USE_FD:
+    case ZMQ_VMCI_CONNECT_TIMEOUT:
+    case ZMQ_MULTICAST_MAXTPDU:
+    case ZMQ_TCP_MAXRT:
+    case ZMQ_CONNECT_TIMEOUT:
+    case ZMQ_XPUB_VERBOSER:
+    case ZMQ_HEARTBEAT_TIMEOUT:
+    case ZMQ_HEARTBEAT_TTL:
+    case ZMQ_HEARTBEAT_IVL:
+    case ZMQ_INVERT_MATCHING:
+    case ZMQ_STREAM_NOTIFY:
+    case ZMQ_XPUB_MANUAL:
+    case ZMQ_HANDSHAKE_IVL:
+    case ZMQ_XPUB_NODROP:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 1
+    case ZMQ_TOS:
+    case ZMQ_ROUTER_HANDOVER:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 0
+    case ZMQ_CONFLATE:
+    case ZMQ_REQ_RELAXED:
+    case ZMQ_REQ_CORRELATE:
+    case ZMQ_PROBE_ROUTER:
+    case ZMQ_PLAIN_SERVER:
+    #endif
+
+    // deprecated
     case ZMQ_IPV4ONLY:
+
       if (! enif_get_int(env, argv[2], &value_int)) {
         return enif_make_badarg(env);
       }
@@ -459,6 +560,12 @@ NIF(erlzmq_nif_getsockopt)
                               enif_make_int64(env, value_int64));
     // uint64_t
     case ZMQ_AFFINITY:
+    
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    case ZMQ_VMCI_BUFFER_SIZE:
+    case ZMQ_VMCI_BUFFER_MIN_SIZE:
+    case ZMQ_VMCI_BUFFER_MAX_SIZE:
+    #endif
       option_len = sizeof(value_uint64);
       if (! socket->mutex) {
         return return_zmq_errno(env, ETERM);
@@ -479,7 +586,34 @@ NIF(erlzmq_nif_getsockopt)
       return enif_make_tuple2(env, enif_make_atom(env, "ok"),
                               enif_make_uint64(env, value_uint64));
     // binary
-    case ZMQ_IDENTITY:
+    case ZMQ_ROUTING_ID:
+
+    // string
+    case ZMQ_GSSAPI_PRINCIPAL:
+    case ZMQ_GSSAPI_SERVICE_PRINCIPAL:
+    case ZMQ_LAST_ENDPOINT:
+    
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 3
+    // string
+    case ZMQ_BINDTODEVICE:
+    #endif
+    
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    // string
+    case ZMQ_SOCKS_PROXY:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 0
+    // string
+    case ZMQ_ZAP_DOMAIN:
+    case ZMQ_PLAIN_PASSWORD:
+    case ZMQ_PLAIN_USERNAME:
+    
+    // binary or Z85 string
+    case ZMQ_CURVE_PUBLICKEY:
+    case ZMQ_CURVE_SECRETKEY:
+    case ZMQ_CURVE_SERVERKEY:
+    #endif
       option_len = sizeof(option_value);
       if (! socket->mutex) {
         return return_zmq_errno(env, ETERM);
@@ -502,24 +636,62 @@ NIF(erlzmq_nif_getsockopt)
       return enif_make_tuple2(env, enif_make_atom(env, "ok"),
                               enif_make_binary(env, &value_binary));
     // int
-    case ZMQ_TYPE:
-    case ZMQ_RCVMORE:
-    case ZMQ_SNDHWM:
-    case ZMQ_RCVHWM:
-    case ZMQ_RATE:
-    case ZMQ_RECOVERY_IVL:
-    case ZMQ_SNDBUF:
-    case ZMQ_RCVBUF:
+    case ZMQ_BACKLOG:
+    case ZMQ_CURVE_SERVER:
+    case ZMQ_GSSAPI_PLAINTEXT:
+    case ZMQ_GSSAPI_SERVER:
+    case ZMQ_IMMEDIATE:
+    case ZMQ_IPV6:
     case ZMQ_LINGER:
+    case ZMQ_MULTICAST_HOPS:
+    case ZMQ_RATE:
+    case ZMQ_RCVBUF:
+    case ZMQ_RCVHWM:
+    case ZMQ_RCVTIMEO:
     case ZMQ_RECONNECT_IVL:
     case ZMQ_RECONNECT_IVL_MAX:
-    case ZMQ_BACKLOG:
-    case ZMQ_MULTICAST_HOPS:
-    case ZMQ_RCVTIMEO:
+    case ZMQ_RECOVERY_IVL:
+    case ZMQ_SNDBUF:
+    case ZMQ_SNDHWM:
     case ZMQ_SNDTIMEO:
-    case ZMQ_IPV4ONLY:
+    case ZMQ_TCP_KEEPALIVE:
+    case ZMQ_TCP_KEEPALIVE_CNT:
+    case ZMQ_TCP_KEEPALIVE_IDLE:
+    case ZMQ_TCP_KEEPALIVE_INTVL:
+    case ZMQ_RCVMORE:
     case ZMQ_EVENTS:
-    case ZMQ_FD:   // FIXME: ZMQ_FD returns SOCKET on Windows
+    case ZMQ_TYPE:
+    case ZMQ_MECHANISM:
+    
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 3
+    case ZMQ_GSSAPI_SERVICE_PRINCIPAL_NAMETYPE:
+    case ZMQ_GSSAPI_PRINCIPAL_NAMETYPE:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 2
+    case ZMQ_USE_FD:
+    case ZMQ_VMCI_CONNECT_TIMEOUT:
+    case ZMQ_MULTICAST_MAXTPDU:
+    case ZMQ_THREAD_SAFE:
+    case ZMQ_TCP_MAXRT:
+    case ZMQ_CONNECT_TIMEOUT:
+    case ZMQ_INVERT_MATCHING:
+    case ZMQ_HANDSHAKE_IVL:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 1
+    case ZMQ_TOS:
+    #endif
+
+    #if ZMQ_VERSION_MAJOR > 4 || ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR >= 0
+    case ZMQ_PLAIN_SERVER:
+    #endif
+    // FIXME SOCKET on Windows, int on POSIX
+    case ZMQ_FD:
+
+    // deprecated
+    case ZMQ_IPV4ONLY:
+
       option_len = sizeof(value_int);
       if (! socket->mutex) {
         return return_zmq_errno(env, ETERM);
@@ -1450,6 +1622,9 @@ static ERL_NIF_TERM return_zmq_errno(ErlNifEnv* env, int const value)
     case ETIMEDOUT:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "etimedout"));
+    case EHOSTUNREACH:
+      return enif_make_tuple2(env, enif_make_atom(env, "error"),
+                              enif_make_atom(env, "ehostunreach"));
     case ECONNREFUSED:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "econnrefused"));
@@ -1459,40 +1634,16 @@ static ERL_NIF_TERM return_zmq_errno(ErlNifEnv* env, int const value)
     case ENAMETOOLONG:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "enametoolong"));
-    case (ZMQ_HAUSNUMERO +  1):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "enotsup"));
-    case (ZMQ_HAUSNUMERO +  2):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "eprotonosupport"));
-    case (ZMQ_HAUSNUMERO +  3):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "enobufs"));
-    case (ZMQ_HAUSNUMERO +  4):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "enetdown"));
-    case (ZMQ_HAUSNUMERO +  5):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "eaddrinuse"));
-    case (ZMQ_HAUSNUMERO +  6):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "eaddrnotavail"));
-    case (ZMQ_HAUSNUMERO +  7):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "econnrefused"));
-    case (ZMQ_HAUSNUMERO +  8):
-      return enif_make_tuple2(env, enif_make_atom(env, "error"),
-                              enif_make_atom(env, "einprogress"));
-    case (ZMQ_HAUSNUMERO + 51):
+    case EFSM:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "efsm"));
-    case (ZMQ_HAUSNUMERO + 52):
+    case ENOCOMPATPROTO:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "enocompatproto"));
-    case (ZMQ_HAUSNUMERO + 53):
+    case ETERM:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "eterm"));
-    case (ZMQ_HAUSNUMERO + 54):
+    case EMTHREAD:
       return enif_make_tuple2(env, enif_make_atom(env, "error"),
                               enif_make_atom(env, "emthread"));
     default:

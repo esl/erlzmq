@@ -297,7 +297,8 @@ timeo() ->
                            {ok, Sc} = erlzmq:socket(Ctx, [push, {active, false}]),
                            ok = erlzmq:connect(Sc, "inproc://timeout_test"),
                            timer:sleep(1000),
-                           ok = erlzmq:close(Sc)
+                           % can't match here as close may return eterm on terminated context
+                           erlzmq:close(Sc)
                    end),
     {Elapsed1, _} = timer:tc(fun() ->
                                      ?assertMatch({error, eagain}, erlzmq:recv(Sb))
@@ -352,8 +353,8 @@ shutdown_stress_loop(0) ->
 shutdown_stress_loop(N) ->
     {ok, C} = erlzmq:context(7),
     {ok, S1} = erlzmq:socket(C, [rep, {active, false}]),
-    ?assertMatch(ok, shutdown_stress_worker_loop(100, C)),
-    ?assertMatch(ok, join_procs(100)),
+    ?assertMatch(ok, shutdown_stress_worker_loop(20, C)),
+    ?assertMatch(ok, join_procs(20)),
     ?assertMatch(ok, erlzmq:close(S1)),
     ?assertMatch(ok, erlzmq:term(C)),
     shutdown_stress_loop(N-1).

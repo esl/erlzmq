@@ -403,10 +403,12 @@ socket_type(rep) ->
     ?'ZMQ_REP';
 socket_type(dealer) ->
     ?'ZMQ_DEALER';
+% deprecated
 socket_type(xreq) ->
     ?'ZMQ_XREQ';
 socket_type(router) ->
     ?'ZMQ_ROUTER';
+% deprecated
 socket_type(xrep) ->
     ?'ZMQ_XREP';
 socket_type(pull) ->
@@ -416,7 +418,9 @@ socket_type(push) ->
 socket_type(xpub) ->
     ?'ZMQ_XPUB';
 socket_type(xsub) ->
-    ?'ZMQ_XSUB'.
+    ?'ZMQ_XSUB';
+socket_type(stream) ->
+    ?'ZMQ_STREAM'.
 
 -spec sendrecv_flags(Flags :: erlzmq_send_recv_flags()) ->
     integer().
@@ -431,47 +435,89 @@ sendrecv_flags([sndmore|Rest]) ->
 -spec option_name(Name :: erlzmq_sockopt()) ->
     integer().
 
-option_name(affinity) ->
-    ?'ZMQ_AFFINITY';
-option_name(identity) ->
-    ?'ZMQ_IDENTITY';
-option_name(subscribe) ->
-    ?'ZMQ_SUBSCRIBE';
-option_name(unsubscribe) ->
-    ?'ZMQ_UNSUBSCRIBE';
-option_name(rate) ->
-    ?'ZMQ_RATE';
-option_name(recovery_ivl) ->
-    ?'ZMQ_RECOVERY_IVL';
-option_name(sndbuf) ->
-    ?'ZMQ_SNDBUF';
-option_name(rcvbuf) ->
-    ?'ZMQ_RCVBUF';
-option_name(rcvmore) ->
-    ?'ZMQ_RCVMORE';
-option_name(fd) ->
-    ?'ZMQ_FD';
-option_name(events) ->
-    ?'ZMQ_EVENTS';
-option_name(linger) ->
-    ?'ZMQ_LINGER';
-option_name(reconnect_ivl) ->
-    ?'ZMQ_RECONNECT_IVL';
-option_name(backlog) ->
-    ?'ZMQ_BACKLOG';
-option_name(reconnect_ivl_max) ->
-    ?'ZMQ_RECONNECT_IVL_MAX';
-option_name(maxmsgsize) ->
-    ?'ZMQ_MAXMSGSIZE';
-option_name(sndhwm) ->
-    ?'ZMQ_SNDHWM';
-option_name(rcvhwm) ->
-    ?'ZMQ_RCVHWM';
-option_name(multicast_hops) ->
-    ?'ZMQ_MULTICAST_HOPS';
-option_name(rcvtimeo) ->
-    ?'ZMQ_RCVTIMEO';
-option_name(sndtimeo) ->
-    ?'ZMQ_SNDTIMEO';
-option_name(ipv4only) ->
-    ?'ZMQ_IPV4ONLY'.
+option_name(affinity) -> ?'ZMQ_AFFINITY';
+option_name(routing_id) -> ?'ZMQ_ROUTING_ID';
+option_name(subscribe) -> ?'ZMQ_SUBSCRIBE';
+option_name(unsubscribe) -> ?'ZMQ_UNSUBSCRIBE';
+option_name(rate) -> ?'ZMQ_RATE';
+option_name(recovery_ivl) -> ?'ZMQ_RECOVERY_IVL';
+option_name(sndbuf) -> ?'ZMQ_SNDBUF';
+option_name(rcvbuf) -> ?'ZMQ_RCVBUF';
+option_name(rcvmore) -> ?'ZMQ_RCVMORE';
+option_name(fd) -> ?'ZMQ_FD';
+option_name(events) -> ?'ZMQ_EVENTS';
+option_name(type) -> ?'ZMQ_TYPE';
+option_name(linger) -> ?'ZMQ_LINGER';
+option_name(reconnect_ivl) -> ?'ZMQ_RECONNECT_IVL';
+option_name(backlog) -> ?'ZMQ_BACKLOG';
+option_name(reconnect_ivl_max) -> ?'ZMQ_RECONNECT_IVL_MAX';
+option_name(maxmsgsize) -> ?'ZMQ_MAXMSGSIZE';
+option_name(sndhwm) -> ?'ZMQ_SNDHWM';
+option_name(rcvhwm) -> ?'ZMQ_RCVHWM';
+option_name(multicast_hops) -> ?'ZMQ_MULTICAST_HOPS';
+option_name(rcvtimeo) -> ?'ZMQ_RCVTIMEO';
+option_name(sndtimeo) -> ?'ZMQ_SNDTIMEO';
+option_name(last_endpoint) -> ?'ZMQ_LAST_ENDPOINT';
+option_name(router_mandatory) -> ?'ZMQ_ROUTER_MANDATORY';
+option_name(tcp_keepalive) -> ?'ZMQ_TCP_KEEPALIVE';
+option_name(tcp_keepalive_cnt) -> ?'ZMQ_TCP_KEEPALIVE_CNT';
+option_name(tcp_keepalive_idle) -> ?'ZMQ_TCP_KEEPALIVE_IDLE';
+option_name(tcp_keepalive_intvl) -> ?'ZMQ_TCP_KEEPALIVE_INTVL';
+option_name(immediate) -> ?'ZMQ_IMMEDIATE';
+option_name(xpub_verbose) -> ?'ZMQ_XPUB_VERBOSE';
+option_name(router_raw) -> ?'ZMQ_ROUTER_RAW';
+option_name(ipv6) -> ?'ZMQ_IPV6';
+option_name(mechanism) -> ?'ZMQ_MECHANISM';
+option_name(plain_server) -> ?'ZMQ_PLAIN_SERVER';
+option_name(plain_username) -> ?'ZMQ_PLAIN_USERNAME';
+option_name(plain_password) -> ?'ZMQ_PLAIN_PASSWORD';
+option_name(curve_server) -> ?'ZMQ_CURVE_SERVER';
+option_name(curve_publickey) -> ?'ZMQ_CURVE_PUBLICKEY';
+option_name(curve_secretkey) -> ?'ZMQ_CURVE_SECRETKEY';
+option_name(curve_serverkey) -> ?'ZMQ_CURVE_SERVERKEY';
+option_name(probe_router) -> ?'ZMQ_PROBE_ROUTER';
+option_name(req_correlate) -> ?'ZMQ_REQ_CORRELATE';
+option_name(req_relaxed) -> ?'ZMQ_REQ_RELAXED';
+option_name(conflate) -> ?'ZMQ_CONFLATE';
+option_name(zap_domain) -> ?'ZMQ_ZAP_DOMAIN';
+option_name(router_handover) -> ?'ZMQ_ROUTER_HANDOVER';
+option_name(tos) -> ?'ZMQ_TOS';
+option_name(connect_routing_id) -> ?'ZMQ_CONNECT_ROUTING_ID';
+option_name(gssapi_server) -> ?'ZMQ_GSSAPI_SERVER';
+option_name(gssapi_principal) -> ?'ZMQ_GSSAPI_PRINCIPAL';
+option_name(gssapi_service_principal) -> ?'ZMQ_GSSAPI_SERVICE_PRINCIPAL';
+option_name(gssapi_plaintext) -> ?'ZMQ_GSSAPI_PLAINTEXT';
+option_name(handshake_ivl) -> ?'ZMQ_HANDSHAKE_IVL';
+option_name(socks_proxy) -> ?'ZMQ_SOCKS_PROXY';
+option_name(xpub_nodrop) -> ?'ZMQ_XPUB_NODROP';
+% context option
+% option_name(blocky) -> ?'ZMQ_BLOCKY';
+option_name(xpub_manual) -> ?'ZMQ_XPUB_MANUAL';
+option_name(xpub_welcome_msg) -> ?'ZMQ_XPUB_WELCOME_MSG';
+option_name(stream_notify) -> ?'ZMQ_STREAM_NOTIFY';
+option_name(invert_matching) -> ?'ZMQ_INVERT_MATCHING';
+option_name(heartbeat_ivl) -> ?'ZMQ_HEARTBEAT_IVL';
+option_name(heartbeat_ttl) -> ?'ZMQ_HEARTBEAT_TTL';
+option_name(heartbeat_timeout) -> ?'ZMQ_HEARTBEAT_TIMEOUT';
+option_name(xpub_verboser) -> ?'ZMQ_XPUB_VERBOSER';
+option_name(connect_timeout) -> ?'ZMQ_CONNECT_TIMEOUT';
+option_name(tcp_maxrt) -> ?'ZMQ_TCP_MAXRT';
+option_name(thread_safe) -> ?'ZMQ_THREAD_SAFE';
+option_name(multicast_maxtpdu) -> ?'ZMQ_MULTICAST_MAXTPDU';
+option_name(vmci_buffer_size) -> ?'ZMQ_VMCI_BUFFER_SIZE';
+option_name(vmci_buffer_min_size) -> ?'ZMQ_VMCI_BUFFER_MIN_SIZE';
+option_name(vmci_buffer_max_size) -> ?'ZMQ_VMCI_BUFFER_MAX_SIZE';
+option_name(vmci_connect_timeout) -> ?'ZMQ_VMCI_CONNECT_TIMEOUT';
+option_name(use_fd) -> ?'ZMQ_USE_FD';
+option_name(gssapi_principal_nametype) -> ?'ZMQ_GSSAPI_PRINCIPAL_NAMETYPE';
+option_name(gssapi_service_principal_nametype) -> ?'ZMQ_GSSAPI_SERVICE_PRINCIPAL_NAMETYPE';
+option_name(bindtodevice) -> ?'ZMQ_BINDTODEVICE';
+% deprecated
+option_name(ipv4only) -> ?'ZMQ_IPV4ONLY';
+option_name(tcp_accept_filter) -> ?'ZMQ_TCP_ACCEPT_FILTER';
+option_name(connect_rid) -> ?'ZMQ_CONNECT_RID';
+option_name(delay_attach_on_connect) -> ?'ZMQ_DELAY_ATTACH_ON_CONNECT';
+option_name(noblock) -> ?'ZMQ_NOBLOCK';
+option_name(fail_unroutable) -> ?'ZMQ_FAIL_UNROUTABLE';
+option_name(router_behavior) -> ?'ZMQ_ROUTER_BEHAVIOR';
+option_name(identity) -> ?'ZMQ_IDENTITY'.
