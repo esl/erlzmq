@@ -240,6 +240,7 @@ NIF(erlzmq_nif_bind)
   char * endpoint = (char *) malloc(endpoint_length + 1);
   if (! enif_get_string(env, argv[1], endpoint, endpoint_length + 1,
                         ERL_NIF_LATIN1)) {
+    free(endpoint);
     return enif_make_badarg(env);
   }
 
@@ -290,10 +291,12 @@ NIF(erlzmq_nif_connect)
   char * endpoint = (char *) malloc(endpoint_length + 1);
   if (! enif_get_string(env, argv[1], endpoint, endpoint_length + 1,
                         ERL_NIF_LATIN1)) {
+    free(endpoint);
     return enif_make_badarg(env);
   }
 
   if (! socket->mutex) {
+    free(endpoint);
     return return_zmq_errno(env, ETERM);
   }
   enif_mutex_lock(socket->mutex);
@@ -301,6 +304,7 @@ NIF(erlzmq_nif_connect)
     if (socket->mutex) {
       enif_mutex_unlock(socket->mutex);
     }
+    free(endpoint);
     return return_zmq_errno(env, ETERM);
   }
   else if (zmq_connect(socket->socket_zmq, endpoint)) {
@@ -573,6 +577,7 @@ NIF(erlzmq_nif_send)
   if (! socket->active) {
     // try send
     if (! socket->mutex) {
+      zmq_msg_close(&req.data.send.msg);
       return return_zmq_errno(env, ETERM);
     }
     enif_mutex_lock(socket->mutex);
@@ -580,6 +585,7 @@ NIF(erlzmq_nif_send)
       if (socket->mutex) {
         enif_mutex_unlock(socket->mutex);
       }
+      zmq_msg_close(&req.data.send.msg);
       return return_zmq_errno(env, ETERM);
     }
     else if (zmq_sendmsg(socket->socket_zmq, &req.data.send.msg,
@@ -616,11 +622,17 @@ NIF(erlzmq_nif_send)
     memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
 
     if (! socket->context->mutex) {
+      zmq_msg_close(&msg);
+      zmq_msg_close(&req.data.send.msg);
+      enif_free_env(req.data.send.env);
       return return_zmq_errno(env, ETERM);
     }
     enif_mutex_lock(socket->context->mutex);
     if (! socket->context->thread_socket_name) {
       enif_mutex_unlock(socket->context->mutex);
+      zmq_msg_close(&msg);
+      zmq_msg_close(&req.data.send.msg);
+      enif_free_env(req.data.send.env);
       return return_zmq_errno(env, ETERM);
     }
     else if (zmq_sendmsg(socket->context->thread_socket, &msg, 0) == -1) {
@@ -777,6 +789,7 @@ NIF(erlzmq_nif_close)
 
   if (! socket->context->mutex) {
     zmq_msg_close(&msg);
+    enif_free_env(req.data.close.env);
     return return_zmq_errno(env, ETERM);
   }
   enif_mutex_lock(socket->context->mutex);
