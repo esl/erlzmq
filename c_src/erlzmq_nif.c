@@ -911,7 +911,27 @@ static void * polling_thread(void * handle)
   for (;;) {
     int count = zmq_poll(vector_p(zmq_pollitem_t, &items_zmq),
                          vector_count(&items_zmq), -1);
-    assert(count != -1);
+    if (count == -1) {
+      int error = zmq_errno();
+      if (error == EINTR) {
+        // The operation was interrupted by delivery of a signal before any events were available
+        continue;
+      } else if (error == ETERM) {
+        // At least one of the members of the items array refers to a socket whose associated ØMQ context was terminated.
+        fprintf(stderr, "context is termianted\n");
+        assert(0);
+        break;
+      } else if (error == EFAULT) {
+        fprintf(stderr, "invalid items providet to zmq_poll\n");
+        assert(0);
+        break;
+      } else {
+        fprintf(stderr, "unexpected error %d returned by zmq_poll\n", error);
+        assert(0);
+        break;
+      }
+    }
+
     if (vector_get(zmq_pollitem_t, &items_zmq, 0)->revents & ZMQ_POLLIN) {
       --count;
     }
@@ -1229,6 +1249,7 @@ static void * polling_thread(void * handle)
       }
     }
   }
+  
   return NULL;
 }
 
