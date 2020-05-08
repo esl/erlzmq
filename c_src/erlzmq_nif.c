@@ -148,7 +148,11 @@ NIF(erlzmq_nif_context)
   char thread_socket_id[64];
   sprintf(thread_socket_id, "inproc://erlzmq-%ld", (long int) context);
   context->thread_socket = zmq_socket(context->context_zmq, ZMQ_PUSH);
-  assert(context->thread_socket);
+  if (!context->thread_socket) {
+    terminate_context(context->context_zmq);
+    enif_release_resource(context);
+    return return_zmq_errno(env, zmq_errno());
+  }
   context->mutex = enif_mutex_create("erlzmq_context_t_mutex");
   assert(context->mutex);
   if (zmq_bind(context->thread_socket, thread_socket_id)) {
