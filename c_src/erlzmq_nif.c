@@ -206,7 +206,9 @@ NIF(erlzmq_nif_socket)
                                                  sizeof(erlzmq_socket_t));
   assert(socket);
   socket->context = context;
-  socket->socket_index = context->socket_index;
+  enif_mutex_lock(context->mutex);
+  socket->socket_index = context->socket_index++;
+  enif_mutex_unlock(context->mutex);
   socket->socket_zmq = zmq_socket(context->context_zmq, socket_type);
   if (! socket->socket_zmq) {
     enif_release_resource(socket);
@@ -217,7 +219,6 @@ NIF(erlzmq_nif_socket)
   socket->mutex = enif_mutex_create("erlzmq_socket_t_mutex");
   assert(socket->mutex);
 
-  context->socket_index++;
   return enif_make_tuple2(env, enif_make_atom(env, "ok"), enif_make_tuple2(env,
                           enif_make_uint64(env, socket->socket_index),
                           enif_make_resource(env, socket)));
