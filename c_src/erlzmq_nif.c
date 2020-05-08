@@ -41,6 +41,7 @@ typedef struct erlzmq_context {
   int64_t socket_index;
   ErlNifTid polling_tid;
   ErlNifMutex * mutex;
+  int terminated;
 } erlzmq_context_t;
 
 #define ERLZMQ_SOCKET_ACTIVE_OFF        0
@@ -54,6 +55,7 @@ typedef struct erlzmq_socket {
   int active;
   ErlNifPid active_pid;
   ErlNifMutex * mutex;
+  int closed;
 } erlzmq_socket_t;
 
 #define ERLZMQ_THREAD_REQUEST_SEND      1
@@ -139,6 +141,8 @@ NIF(erlzmq_nif_context)
   erlzmq_context_t * context = enif_alloc_resource(erlzmq_nif_resource_context,
                                                    sizeof(erlzmq_context_t));
   assert(context);
+  context->terminated = 1;
+  context->polling_tid = 0;
   context->context_zmq = zmq_init(thread_count);
   if (! context->context_zmq) {
     enif_release_resource(context);
@@ -173,6 +177,8 @@ NIF(erlzmq_nif_context)
     enif_release_resource(context);
     return return_zmq_errno(env, value_errno);
   }
+
+  context->terminated = 0;
 
   return enif_make_tuple2(env, enif_make_atom(env, "ok"),
                           enif_make_resource(env, context));
@@ -209,11 +215,13 @@ NIF(erlzmq_nif_socket)
   socket->socket_index = context->socket_index;
   socket->socket_zmq = zmq_socket(context->context_zmq, socket_type);
   if (! socket->socket_zmq) {
+    socket->closed = 1;
     enif_release_resource(socket);
     return return_zmq_errno(env, zmq_errno());
   }
   socket->active = active;
   socket->active_pid = active_pid;
+  socket->closed = 0;
   socket->mutex = enif_mutex_create("erlzmq_socket_t_mutex");
   assert(socket->mutex);
 
@@ -567,7 +575,10 @@ NIF(erlzmq_nif_send)
     return return_zmq_errno(env, zmq_errno());
   }
 
-  memcpy(zmq_msg_data(&req.data.send.msg), binary.data, binary.size);
+  void * data = zmq_msg_data(&req.data.send.msg);
+  assert(data);
+
+  memcpy(data, binary.data, binary.size);
 
   int polling_thread_send = 1;
   if (! socket->active) {
@@ -613,7 +624,9 @@ NIF(erlzmq_nif_send)
       return return_zmq_errno(env, zmq_errno());
     }
 
-    memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
+    void * data = zmq_msg_data(&msg);
+    assert(data);
+    memcpy(data, &req, sizeof(erlzmq_thread_request_t));
 
     if (! socket->context->mutex) {
       return return_zmq_errno(env, ETERM);
@@ -706,7 +719,9 @@ NIF(erlzmq_nif_recv)
       return return_zmq_errno(env, zmq_errno());
     }
 
-    memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
+    void * data = zmq_msg_data(&msg);
+    assert(data);
+    memcpy(data, &req, sizeof(erlzmq_thread_request_t));
 
     if (! socket->context->mutex) {
       zmq_msg_close(&msg);
@@ -742,7 +757,9 @@ NIF(erlzmq_nif_recv)
 
     ErlNifBinary binary;
     enif_alloc_binary(zmq_msg_size(&msg), &binary);
-    memcpy(binary.data, zmq_msg_data(&msg), zmq_msg_size(&msg));
+    void * data = zmq_msg_data(&msg);
+    assert(data);
+    memcpy(binary.data, data, zmq_msg_size(&msg));
 
     zmq_msg_close(&msg);
 
@@ -773,14 +790,15 @@ NIF(erlzmq_nif_close)
     return return_zmq_errno(env, zmq_errno());
   }
 
-  memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
+  void * data = zmq_msg_data(&msg);
+  assert(data);
+  memcpy(data, &req, sizeof(erlzmq_thread_request_t));
 
-  if (! socket->context->mutex) {
-    zmq_msg_close(&msg);
-    return return_zmq_errno(env, ETERM);
+  if (socket->context->mutex) {
+    enif_mutex_lock(socket->context->mutex);
   }
-  enif_mutex_lock(socket->context->mutex);
-  if (! socket->context->thread_socket_name) {
+
+  if (socket->context->terminated) {
     // context is gone
     if (socket->context->mutex) {
       enif_mutex_unlock(socket->context->mutex);
@@ -796,26 +814,35 @@ NIF(erlzmq_nif_close)
       enif_mutex_unlock(socket->mutex);
       return return_zmq_errno(env, ETERM);
     }
-    zmq_close(socket->socket_zmq);
+    if (zmq_close(socket->socket_zmq) == -1) {
+      fprintf(stderr, "close failed %s\n", strerror(zmq_errno()));
+      assert(0);
+    }
     socket->socket_zmq = 0;
+    socket->closed = 1;
     enif_mutex_unlock(socket->mutex);
     enif_mutex_destroy(socket->mutex);
     socket->mutex = 0;
+    
     enif_release_resource(socket);
     return enif_make_atom(env, "ok");
   }
-  else if (zmq_sendmsg(socket->context->thread_socket, &msg, 0) == -1) {
-    enif_mutex_unlock(socket->context->mutex);
-    zmq_msg_close(&msg);
-    enif_free_env(req.data.close.env);
-    return return_zmq_errno(env, zmq_errno());
-  }
   else {
-    enif_mutex_unlock(socket->context->mutex);
-    zmq_msg_close(&msg);
-    // each pointer to the socket in a request increments the reference
-    enif_keep_resource(socket);
-    return enif_make_copy(env, req.data.close.ref);
+    enif_mutex_lock(socket->mutex);
+    if (zmq_sendmsg(socket->context->thread_socket, &msg, 0) == -1) {
+      enif_mutex_unlock(socket->mutex);
+      enif_mutex_unlock(socket->context->mutex);
+      zmq_msg_close(&msg);
+      enif_free_env(req.data.close.env);
+      return return_zmq_errno(env, zmq_errno());
+    }
+    else {
+      socket->closed = 1;
+      enif_mutex_unlock(socket->mutex);
+      enif_mutex_unlock(socket->context->mutex);
+      zmq_msg_close(&msg);
+      return enif_make_copy(env, req.data.close.ref);
+    }
   }
 }
 
@@ -840,7 +867,9 @@ NIF(erlzmq_nif_term)
     return return_zmq_errno(env, zmq_errno());
   }
 
-  memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
+  void * data = zmq_msg_data(&msg);
+  assert(data);
+  memcpy(data, &req, sizeof(erlzmq_thread_request_t));
 
   if (! context->mutex) {
     zmq_msg_close(&msg);
@@ -863,6 +892,7 @@ NIF(erlzmq_nif_term)
     return return_zmq_errno(env, zmq_errno());
   }
   else {
+    context->terminated = 1;
     enif_mutex_unlock(context->mutex);
     zmq_msg_close(&msg);
     // thread has a reference to the context, decrement here
@@ -965,7 +995,9 @@ static void * polling_thread(void * handle)
 
           ErlNifBinary binary;
           enif_alloc_binary(zmq_msg_size(&msg), &binary);
-          memcpy(binary.data, zmq_msg_data(&msg), zmq_msg_size(&msg));
+          void * data = zmq_msg_data(&msg);
+          assert(data);
+          memcpy(binary.data, data, zmq_msg_size(&msg));
           zmq_msg_close(&msg);
   
           if (r->data.recv.socket->active == ERLZMQ_SOCKET_ACTIVE_ON) {
@@ -1076,6 +1108,7 @@ static void * polling_thread(void * handle)
 
       erlzmq_thread_request_t * r =
         (erlzmq_thread_request_t *) zmq_msg_data(&msg);
+      assert(r);
       ErlNifMutex * mutex = 0;
       if (r->type == ERLZMQ_THREAD_REQUEST_SEND) {
         zmq_pollitem_t item_zmq = {r->data.send.socket->socket_zmq,
@@ -1134,7 +1167,10 @@ static void * polling_thread(void * handle)
           }
         }
         // close the socket
-        zmq_close(r->data.close.socket->socket_zmq);
+        if (zmq_close(r->data.close.socket->socket_zmq) == -1) {
+          fprintf(stderr, "close failed %s\n", strerror(zmq_errno()));
+          assert(0);
+        }
         r->data.close.socket->socket_zmq = 0;
         mutex = r->data.close.socket->mutex;
         r->data.close.socket->mutex = 0;
@@ -1207,7 +1243,6 @@ static void * polling_thread(void * handle)
         enif_mutex_unlock(mutex);
         enif_mutex_destroy(mutex);
         void * const context_term = context->context_zmq;
-        enif_release_resource(context);
 
         // notify the waiting request
         enif_send(NULL, &r->data.term.pid, r->data.term.env,
@@ -1221,6 +1256,8 @@ static void * polling_thread(void * handle)
         // the thread will block here until all sockets
         // within the context are closed
         zmq_term(context_term);
+        context->context_zmq = 0;
+        enif_release_resource(context);
         return NULL;
       }
       else {
@@ -1248,7 +1285,9 @@ static ERL_NIF_TERM add_active_req(ErlNifEnv* env, erlzmq_socket_t * socket)
     return return_zmq_errno(env, zmq_errno());
   }
 
-  memcpy(zmq_msg_data(&msg), &req, sizeof(erlzmq_thread_request_t));
+  void * data = zmq_msg_data(&msg);
+  assert(data);
+  memcpy(data, &req, sizeof(erlzmq_thread_request_t));
 
   if (! socket->context->mutex) {
     zmq_msg_close(&msg);
@@ -1501,18 +1540,45 @@ static ERL_NIF_TERM return_zmq_errno(ErlNifEnv* env, int const value)
   }
 }
 
+static void context_destructor(ErlNifEnv * env, erlzmq_context_t * context) {
+  if (!context->terminated) {
+    fprintf(stderr, "destructor reached for context while not terminated\n");
+    assert(0);
+  }
+
+  if (!context->polling_tid) {
+    // polling thread not started
+    return;
+  }
+
+  int const value_errno = enif_thread_join(context->polling_tid, NULL);
+  if (value_errno != 0) {
+    fprintf(stderr, "unable to join polling thread %s\n", strerror(value_errno));
+    assert(0);
+  }
+
+  context->polling_tid = 0;
+}
+
+static void socket_destructor(ErlNifEnv * env, erlzmq_socket_t * socket) {
+  if (!socket->closed) {
+    fprintf(stderr, "destructor reached for socket %d while not closed\n", socket->socket_index);
+    assert(0);
+  }
+}
+
 static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
   erlzmq_nif_resource_context =
     enif_open_resource_type(env, NULL,
                             "erlzmq_nif_resource_context",
-                            NULL,
+                            (ErlNifResourceDtor*)context_destructor,
                             ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER,
                             0);
   erlzmq_nif_resource_socket =
     enif_open_resource_type(env, NULL,
                             "erlzmq_nif_resource_socket",
-                            NULL,
+                            (ErlNifResourceDtor*)socket_destructor,
                             ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER,
                             0);
   return 0;
