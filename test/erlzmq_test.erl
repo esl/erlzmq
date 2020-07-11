@@ -492,3 +492,49 @@ basic_tests(Transport, Type1, Type2, Mode) ->
     ok = erlzmq:close(S2),
     ok = erlzmq:term(C).
 
+recv_timeout_breaks_message_guarantees_test() ->
+    ?PRINT_START,
+    {ok, C} = erlzmq:context(1),
+    {ok, S1} = erlzmq:socket(C, [push, {active, false}]),
+    {ok, S2} = erlzmq:socket(C, [pull, {active, false}]),
+
+    ok = erlzmq:setsockopt(S2, sndtimeo, 500),
+    ok = erlzmq:setsockopt(S2, rcvtimeo, 500),
+
+    ok = erlzmq:connect(S1, "tcp://127.0.0.1:5559"),
+    ok = erlzmq:bind(S2, "tcp://*:5559"),
+
+    ok = erlzmq:send(S1, <<"ABC">>, [sndmore]),
+    ok = erlzmq:send(S1, <<"DEF">>),
+
+    %% send and receive a multipart message. should be fine.
+    {ok, Msg1} = erlzmq:recv(S2),
+    ?assertMatch(<<"ABC">> , Msg1),
+    {ok, RcvMore1} = erlzmq:getsockopt(S2, rcvmore),
+    ?assert(RcvMore1 > 0),
+    {ok, Msg2} = erlzmq:recv(S2),
+    {ok, RcvMore2} = erlzmq:getsockopt(S2, rcvmore),
+    ?assertMatch(0, RcvMore2),
+    ?assertMatch(<<"DEF">>, Msg2),
+
+    %% try to read when no message is there. this should time out.
+    ?assertMatch({error, eagain}, erlzmq:recv(S2)),
+
+    %% send the next multipart message.
+    ok = erlzmq:send(S1, <<"GHI">>, [sndmore]),
+    ok = erlzmq:send(S1, <<"JKL">>),
+
+    %% this will drop the first part of the message just sent.
+    {ok, Msg3} = erlzmq:recv(S2),
+    ?assertMatch(<<"GHI">> , Msg3),
+    {ok, RcvMore3} = erlzmq:getsockopt(S2, rcvmore),
+    ?assert(RcvMore3 > 0),
+    {ok, Msg4} = erlzmq:recv(S2),
+    {ok, RcvMore4} = erlzmq:getsockopt(S2, rcvmore),
+    ?assertMatch(0, RcvMore4),
+    ?assertMatch(<<"JKL">>, Msg4),
+
+    ok = erlzmq:close(S1),
+    ok = erlzmq:close(S2),
+    ok = erlzmq:term(C),
+    ?PRINT_END.
