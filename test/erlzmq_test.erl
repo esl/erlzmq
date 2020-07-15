@@ -509,30 +509,31 @@ recv_timeout_breaks_message_guarantees_test() ->
 
     %% send and receive a multipart message. should be fine.
     {ok, Msg1} = erlzmq:recv(S2),
-    ?assertMatch(<<"ABC">> , Msg1),
+    ?assertEqual(<<"ABC">> , Msg1),
     {ok, RcvMore1} = erlzmq:getsockopt(S2, rcvmore),
     ?assert(RcvMore1 > 0),
     {ok, Msg2} = erlzmq:recv(S2),
     {ok, RcvMore2} = erlzmq:getsockopt(S2, rcvmore),
-    ?assertMatch(0, RcvMore2),
-    ?assertMatch(<<"DEF">>, Msg2),
+    ?assertEqual(0, RcvMore2),
+    ?assertEqual(<<"DEF">>, Msg2),
 
     %% try to read when no message is there. this should time out.
+
     ?assertMatch({error, eagain}, erlzmq:recv(S2)),
 
-    %% send the next multipart message.
+    %% %% send the next multipart message.
     ok = erlzmq:send(S1, <<"GHI">>, [sndmore]),
     ok = erlzmq:send(S1, <<"JKL">>),
 
-    %% this will drop the first part of the message just sent.
+    %% now receive all parts.
     {ok, Msg3} = erlzmq:recv(S2),
-    ?assertMatch(<<"GHI">> , Msg3),
+    ?assertEqual(<<"GHI">> , Msg3),
     {ok, RcvMore3} = erlzmq:getsockopt(S2, rcvmore),
     ?assert(RcvMore3 > 0),
     {ok, Msg4} = erlzmq:recv(S2),
     {ok, RcvMore4} = erlzmq:getsockopt(S2, rcvmore),
-    ?assertMatch(0, RcvMore4),
-    ?assertMatch(<<"JKL">>, Msg4),
+    ?assertEqual(0, RcvMore4),
+    ?assertEqual(<<"JKL">>, Msg4),
 
     ok = erlzmq:close(S1),
     ok = erlzmq:close(S2),

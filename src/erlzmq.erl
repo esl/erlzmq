@@ -186,13 +186,6 @@ send({I, Socket}, Binary, Flags)
                     ok;
                 {Ref, {error, _} = Error} ->
                     Error
-            after case  erlzmq_nif:getsockopt(Socket,?'ZMQ_SNDTIMEO') of
-                       {ok, -1} ->
-                           infinity;
-                       {ok, Else} ->
-                           Else
-                   end ->
-                    {error, eagain}
             end;
         Result ->
             Result
@@ -251,13 +244,6 @@ recv({I, Socket}, Flags)
                     Error;
                 {Ref, Result} ->
                     {ok, Result}
-            after case erlzmq_nif:getsockopt(Socket,?'ZMQ_RCVTIMEO') of
-                      {ok, -1} ->
-                          infinity;
-                      {ok, Else} ->
-                          Else
-                  end ->
-                    {error, eagain}
             end;
         Result ->
             Result
